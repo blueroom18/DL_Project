@@ -9,21 +9,19 @@ module Main(
     input clk,
     input light_dip,
     output light_on_,
-    output [7:0]tub,
+    output [7:0]chip,
     output [7:0]seg_74,
     output [7:0]seg_30
+
+    ,output sA,sS,sD,sW,sX
 );
     wire sign_pos_A, sign_pos_S,sign_neg_S,sign_pos_W, sign_pos_X, sign_pos_D;
-    wire light_on;
-    wire [3:0] sign7, sign6, sign5, sign4, sign3, sign2, sign1, sign0;
-    wire [3:0] chip_74, chip_30;
-    wire [7:0] seg_74, seg_30;
-    wire [7:0] tub
+    wire [31:0] sign;
     wire [6:0]nxt_state;
     reg [6:0]state;
 
     //light module
-    assign light_on = light_dip & state[6];
+    assign light_on_ = light_dip & state[6];
 
     //debounce module
     Edge_detection edge_detection(
@@ -46,20 +44,43 @@ module Main(
         state <= 7'b0000000;
     end
 
+    always @(nxt_state) begin
+        state <= nxt_state;
+    end
+
     //control module
     control_module control_module(
         .state(state),
         .sign_pos_A(sign_pos_A),
         .sign_pos_S(sign_pos_S),
+        .sign_neg_S(sign_neg_S),
         .sign_pos_W(sign_pos_W),
         .sign_pos_X(sign_pos_X),
         .sign_pos_D(sign_pos_D),
+        .rst(buttom_rst),
+        .clk(clk),
+        .sign(sign),
         .nxt_state(nxt_state)
     );
+    
+    //output module
+    print_output print(
+        .en(state[6]),
+        .sign7(sign[31:28]),
+        .sign6(sign[27:24]),
+        .sign5(sign[23:20]),
+        .sign4(sign[19:16]),
+        .sign3(sign[15:12]),
+        .sign2(sign[11:8]),
+        .sign1(sign[7:4]),
+        .sign0(sign[3:0]),
+        .rst(buttom_rst),
+        .clk(clk),
+        .seg_74(seg_74),
+        .seg_30(seg_30),
+        .tub_sel(chip)
+    );
 
-    always @(nxt_state) begin
-        state <= nxt_state;
-    end
 endmodule
 
 
@@ -81,54 +102,32 @@ module Edge_detection(
     output sign_pos_X,
     output sign_pos_D
 );
-    reg [2:0] trig_A, trig_S, trig_W, trig_X, trig_D;
+    reg [2:0]cnt;
+    reg [3:0] trig_A, trig_S, trig_W, trig_X, trig_D;
     always @(posedge clk,negedge buttom_rst) begin
         if(!buttom_rst) begin
-            trig_A <= 3'b000;
-            trig_S <= 3'b000;
-            trig_W <= 3'b000;
-            trig_X <= 3'b000;
-            trig_D <= 3'b000;
+            trig_A <= 4'b0000;
+            trig_S <= 4'b0000;
+            trig_W <= 4'b0000;
+            trig_X <= 4'b0000;
+            trig_D <= 4'b0000;
+            cnt <= 3'b000;
         end
         else begin
-            trig_A <= {trig_A[1:0],buttom_A};
-            trig_S <= {trig_S[1:0],buttom_S};
-            trig_W <= {trig_W[1:0],buttom_W};
-            trig_X <= {trig_X[1:0],buttom_X};
-            trig_D <= {trig_D[1:0],buttom_D};
+            cnt <= cnt + 3'b001;
+            if(cnt == 3'b111) begin
+                trig_A <= {trig_A[2:0],buttom_A};
+                trig_S <= {trig_S[2:0],buttom_S};
+                trig_W <= {trig_W[2:0],buttom_W};
+                trig_X <= {trig_X[2:0],buttom_X};
+                trig_D <= {trig_D[2:0],buttom_D};
+            end
         end
     end
-    assign sign_pos_A = (~trig_A[2])&trig_A[1];
-    assign sign_pos_S = (~trig_S[2])&trig_S[1];
-    assign sign_neg_S = trig_S[2]&(~trig_S[1]);
-    assign sign_pos_W = (~trig_W[2])&trig_W[1];
-    assign sign_pos_X = (~trig_X[2])&trig_X[1];
-    assign sign_pos_D = (~trig_D[2])&trig_D[1];
+    assign sign_pos_A = (~trig_A[3])&(~trig_A[2])&trig_A[1];
+    assign sign_pos_S = (~trig_S[3])&(~trig_S[2])&trig_S[1];
+    assign sign_neg_S = (trig_S[3])&(trig_S[2])&(~trig_S[1]);
+    assign sign_pos_W = (~trig_W[3])&(~trig_W[2])&trig_W[1];
+    assign sign_pos_X = (~trig_X[3])&(~trig_X[2])&trig_X[1];
+    assign sign_pos_D = (~trig_D[3])&(~trig_D[2])&trig_D[1];
 endmodule
-
-
-/*
-ouput module with [3:0]sign7-0, 7segment display
-*/
-module print_output(
-    input light_on,
-    input [3:0] sign7,
-    input [3:0] sign6,
-    input [3:0] sign5,
-    input [3:0] sign4,
-    input [3:0] sign3,
-    input [3:0] sign2,
-    input [3:0] sign1,
-    input [3:0] sign0,
-    input clk,
-    output light_on_,
-    output [3:0] chip_74,
-    output [7:0] seg_74,
-    output [3:0] chip_30,
-    output [3:0] seg_30,
-);
-    parameter [7:0]num0=8'b;
-    assign light_on_ = light_on;
-    
-endmodule
-
